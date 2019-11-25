@@ -53,10 +53,54 @@
 
 
 
+(defrule make-init-tile
+	(declare (salience 40))
+	(params (x-min ?xmin) (z-min ?zmin))
+	(not (floortile (x ?xmin) (z ?zmin)))
+	(not (keytile (x ?xmin) (z ?zmin)))
+=>
+	(assert (floortile (x ?xmin) (z ?zmin)))
+)
+
+(defrule make-adj-tile-x
+	(declare (salience 40))
+	(params (x-max ?xmax))
+	(or
+		(floortile (x ?x) (z ?z))
+		(keytile (x ?x) (z ?z))
+	)
+	(not (floortile (x =(+ ?x 1)) (z ?z)))
+	(not (keytile (x =(+ ?x 1)) (z ?z)))
+	(test (< (+ ?x 1) ?xmax))
+=>
+	(bind ?x1 (+ ?x 1))
+	(assert (floortile (x ?x1) (z ?z)))
+)
+
+(defrule make-adj-tile-z
+	(declare (salience 40))
+	(params (z-max ?zmax))
+	(or
+		(floortile (x ?x) (z ?z))
+		(keytile (x ?x) (z ?z))
+	)
+	(not (floortile (x ?x) (z =(+ ?z 1))))
+	(not (keytile (x ?x) (z =(+ ?z 1))))
+	(test (< (+ ?z 1) ?zmax))
+=>
+	(bind ?z1 (+ ?z 1))
+	(assert (floortile (x ?x) (z ?z1)))
+)
+
+
+
 
 (defrule reset-fns
-	(declare (salience 41))
-	(scanner)
+	(declare (salience 32))
+	(params (x-max ?xmax))
+	(scanner (col ?x) (row ?z))
+	(test (neq ?x ?xmax))
+
 	?fv-r <- (floorvariant (id rocky))
 	?fv-s <- (floorvariant (id sparse))
 	(not (fns-set-for-row TRUE))
@@ -69,7 +113,7 @@
 )
 
 (defrule init-fns
-	(declare (salience 40))
+	(declare (salience 31))
 =>
 	(assert (floorvariant (id rocky) (ftype (0 0))))
 	(assert (floorvariant (id sparse) (ftype (0 0))))
@@ -78,7 +122,7 @@
 
 
 (defrule inform-rocky-x
-	(declare (salience 40))
+	(declare (salience 31))
 	(params (z-max ?zmax))
 	(scanner (row ?z&~?zmax))
 	?ft <- (keytile (variant rocky) (x ?x) (z ?z) (x-visited FALSE))
@@ -96,7 +140,7 @@
 )
 
 (defrule inform-sparse-x
-	(declare (salience 40))
+	(declare (salience 31))
 	(params (z-max ?zmax))
 	(scanner (row ?z&~?zmax))
 	?ft <- (keytile (variant sparse) (x ?x) (z ?z) (x-visited FALSE))
@@ -164,118 +208,219 @@
 
 
 
-(defrule make-init-tile
-	(declare (salience 20))
-	(params (x-min ?xmin) (z-min ?zmin))
-	(not (floortile (x ?xmin) (z ?zmin)))
-=>
-	(assert (floortile (x ?xmin) (z ?zmin)))
-)
 
-(defrule make-adj-tile-x
-	(declare (salience 20))
-	(params (x-max ?xmax))
-	(or
-		(floortile (x ?x) (z ?z))
-		(keytile (x ?x) (z ?z))
-	)
-	(not (floortile (x =(+ ?x 1)) (z ?z)))
-	(not (keytile (x =(+ ?x 1)) (z ?z)))
-	(test (< ?x ?xmax))
-=>
-	(bind ?x1 (+ ?x 1))
-	(assert (floortile (x ?x1) (z ?z)))
-)
-
-(defrule make-adj-tile-z
-	(declare (salience 20))
+(defrule update-x
+	(declare (salience 10))
 	(params (z-max ?zmax))
+	(scanner (row ?z&~?zmax))
+	(floorvariant (id rocky) (ftype ?frocky))
+	(floorvariant (id sparse) (ftype ?fsparse))
+	?tile <- (floortile (variant ?v) (x ?x) (z ?z) (x-visited FALSE))
 	(or
-		(floortile (x ?x) (z ?z))
-		(keytile (x ?x) (z ?z))
+		(test (<= (get-cf ?tile) (get-fs-value ?fsparse ?x)))
+		(test (<= (get-cf ?tile) (get-fs-value ?frocky ?x)))
+		(test (eq ?v nil))
 	)
-	(not (floortile (x ?x) (z =(+ ?z 1))))
-	(not (keytile (x ?x) (z =(+ ?z 1))))
-	(test (< ?z ?zmax))
 =>
-	(bind ?z1 (+ ?z 1))
-	(assert (floortile (x ?x) (z ?z1)))
-)
 
+	(if (<= (get-fs-value ?frocky ?x) (get-fs-value ?fsparse ?x))
+		then
+		(bind ?new-v sparse)
+		(bind ?fs (get-fs-value ?fsparse ?x))
+		(bind ?cf (* ?fs (- 1 (get-fs-value ?frocky ?x))))
+		else
+		(bind ?new-v rocky)
+		(bind ?fs (get-fs-value ?frocky ?x))
+		(bind ?cf (* ?fs (- 1 (get-fs-value ?fsparse ?x))))
+	)
 
-
-
-
-
-
-(defrule update-rocky-x
-	(declare (salience 10))
-	(scanner (row ?z))
-	(floorvariant (id rocky) (ftype ?frocky))
-	(floorvariant (id sparse) (ftype ?fsparse))
-	?tile <- (floortile (x ?x) (z ?z) (x-visited FALSE) (z-visited FALSE))
-	(test (> (get-fs-value ?frocky ?x) (get-fs-value ?fsparse ?x)))
-=>
-	(bind ?fs (get-fs-value ?frocky ?x))
-	(printout t "Make rocky " ?x ": Rocky " (get-fs-value ?frocky ?x) " and sparse " (get-fs-value ?fsparse ?x) crlf)
+	(printout t "Make " ?new-v " " ?x ": Rocky " (get-fs-value ?frocky ?x) " and sparse " (get-fs-value ?fsparse ?x) crlf)
 
 	(disable-rule-cf-calculation)
 	(retract ?tile)
-	(assert (floortile (variant rocky) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE)) CF ?fs)
+	(assert (floortile (variant ?new-v) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE)) CF ?cf)
 	(enable-rule-cf-calculation)
 )
 
-(defrule update-sparse-x
+(defrule update-up-left-on-row-scan
 	(declare (salience 10))
 	(scanner (row ?z))
+	(params (x-min ?xmin) (z-min ?zmin))
+	?tile <- (keytile (x ?x) (z ?z))
+
+	(test (> ?x ?xmin))
+	(test (> ?z ?zmin))
+	
+	?target <- (floortile (variant ?v) (x ?x0) (z ?z0) (x-visited ?xvisited))
+	(test (eq ?x0 (- ?x 1)))
+	(test (eq ?z0 (- ?z 1)))
+
+	(or
+		(test (eq ?v nil))
+		(test (< (get-cf ?target) 0.1))
+	)
+
 	(floorvariant (id rocky) (ftype ?frocky))
 	(floorvariant (id sparse) (ftype ?fsparse))
-	(params (x-max ?xmax))
-	?tile <- (floortile (x ?x) (z ?z) (x-visited FALSE))
-	(test (<= (get-fs-value ?frocky ?x) (get-fs-value ?fsparse ?x)))
 =>
-	(bind ?fs (get-fs-value ?fsparse ?x))
-	(printout t "Make sparse " ?x ": Rocky " (get-fs-value ?frocky ?x) " and sparse " (get-fs-value ?fsparse ?x) crlf)
+	(if (<= (get-fs-value ?frocky ?x0) (get-fs-value ?fsparse ?x0))
+		then
+		(bind ?new-v sparse)
+		(bind ?fs (get-fs-value ?fsparse ?x0))
+		else
+		(bind ?new-v rocky)
+		(bind ?fs (get-fs-value ?frocky ?x0))	
+	)
+	(bind ?cf (* ?fs 0.4))
 
 	(disable-rule-cf-calculation)
-	(retract ?tile)
-	(assert (floortile (variant sparse) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE)) CF ?fs)
+	(retract ?target)
+	(assert (floortile (variant ?new-v) (x ?x0) (z ?z0) (x-visited ?xvisited) (z-visited FALSE)) CF ?cf)
 	(enable-rule-cf-calculation)
 )
 
-(defrule update-rocky-z
+(defrule update-up-right-on-row-scan
+	(declare (salience 10))
+	(scanner (row ?z))
+	(params (x-max ?xmax) (z-min ?zmin))
+	?tile <- (keytile (x ?x) (z ?z))
+
+	(test (< ?x (- ?xmax 1)))
+	(test (> ?z ?zmin))
+	
+	?target <- (floortile (variant ?v) (x ?x0) (z ?z0) (x-visited ?xvisited))
+	(test (eq ?x0 (+ ?x 1)))
+	(test (eq ?z0 (- ?z 1)))
+
+	(or
+		(test (eq ?v nil))
+		(test (< (get-cf ?target) 0.1))
+	)
+
+	(floorvariant (id rocky) (ftype ?frocky))
+	(floorvariant (id sparse) (ftype ?fsparse))
+=>
+	(if (<= (get-fs-value ?frocky ?x0) (get-fs-value ?fsparse ?x0))
+		then
+		(bind ?new-v sparse)
+		(bind ?fs (get-fs-value ?fsparse ?x0))
+		else
+		(bind ?new-v rocky)
+		(bind ?fs (get-fs-value ?frocky ?x0))	
+	)
+	(bind ?cf (* ?fs 0.4))
+
+
+	(disable-rule-cf-calculation)
+	(retract ?target)
+	(assert (floortile (variant ?new-v) (x ?x0) (z ?z0) (x-visited ?xvisited) (z-visited FALSE)) CF ?cf)
+	(enable-rule-cf-calculation)
+)
+
+(defrule update-down-right-on-row-scan
+	(declare (salience 10))
+	(scanner (row ?z))
+	(params (x-max ?xmax) (z-max ?zmax))
+	?tile <- (keytile (x ?x) (z ?z))
+
+	(test (< ?x (- ?xmax 1)))
+	(test (< ?z (- ?zmax 1)))
+	
+	?target <- (floortile (variant ?v) (x ?x0) (z ?z0) (x-visited ?xvisited))
+	(test (eq ?x0 (+ ?x 1)))
+	(test (eq ?z0 (+ ?z 1)))
+
+	(or
+		(test (eq ?v nil))
+		(test (< (get-cf ?target) 0.1))
+	)
+
+	(floorvariant (id rocky) (ftype ?frocky))
+	(floorvariant (id sparse) (ftype ?fsparse))
+	
+=>
+	(if (<= (get-fs-value ?frocky ?x0) (get-fs-value ?fsparse ?x0))
+		then
+		(bind ?new-v sparse)
+		(bind ?fs (get-fs-value ?fsparse ?x0))
+		else
+		(bind ?new-v rocky)
+		(bind ?fs (get-fs-value ?frocky ?x0))	
+	)
+	(bind ?cf (* ?fs 0.4))
+
+	(disable-rule-cf-calculation)
+	(retract ?target)
+	(assert (floortile (variant ?new-v) (x ?x0) (z ?z0) (x-visited ?xvisited) (z-visited FALSE)) CF ?cf)
+	(enable-rule-cf-calculation)
+)
+
+(defrule update-down-left-on-row-scan
+	(declare (salience 10))
+	(scanner (row ?z))
+	(params (x-min ?xmin) (z-max ?zmax))
+	?tile <- (keytile (x ?x) (z ?z))
+
+	(test (> ?x ?xmin))
+	(test (< ?z (- ?zmax 1)))
+	
+	?target <- (floortile (variant ?v) (x ?x0) (z ?z0) (x-visited ?xvisited))
+	(test (eq ?x0 (- ?x 1)))
+	(test (eq ?z0 (+ ?z 1)))
+
+	(or
+		(test (eq ?v nil))
+		(test (< (get-cf ?target) 0.1))
+	)
+
+	(floorvariant (id rocky) (ftype ?frocky))
+	(floorvariant (id sparse) (ftype ?fsparse))
+=>
+	(if (<= (get-fs-value ?frocky ?x0) (get-fs-value ?fsparse ?x0))
+		then
+		(bind ?new-v sparse)
+		(bind ?fs (get-fs-value ?fsparse ?x0))
+		else
+		(bind ?new-v rocky)
+		(bind ?fs (get-fs-value ?frocky ?x0))	
+	)
+	(bind ?cf (* ?fs 0.4))
+
+	(disable-rule-cf-calculation)
+	(retract ?target)
+	(assert (floortile (variant ?new-v) (x ?x0) (z ?z0) (x-visited ?xvisited) (z-visited FALSE)) CF ?cf)
+	(enable-rule-cf-calculation)
+)
+
+(defrule update-z
 	(declare (salience 0))
-	(scanner (col ?x))
+	(params (z-max ?zmax))
+	(scanner (col ?x) (row ?zmax))
 	(floorvariant (id rocky) (ftype ?frocky))
 	(floorvariant (id sparse) (ftype ?fsparse))
-	?tile <- (floortile (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE))
-	(test (> (get-fs-value ?frocky ?z) (get-fs-value ?fsparse ?z)))
-	(test (> (get-fs-value ?frocky ?z) (get-cf ?tile)))
+	?tile <- (floortile (x ?x) (z ?z) (z-visited FALSE))
+	(or
+		(test (< (get-cf ?tile) (get-fs-value ?fsparse ?z)))
+		(test (< (get-cf ?tile) (get-fs-value ?frocky ?z)))
+	)
 =>
-	(bind ?fs (get-fs-value ?frocky ?z))
-	(printout t "Make rocky " ?z ": Rocky " (get-fs-value ?frocky ?z) " and sparse " (max (get-fs-value ?fsparse ?z) (get-cf ?tile)) crlf)
+	(if (<= (get-fs-value ?frocky ?z) (get-fs-value ?fsparse ?z))
+		then
+		(bind ?new-v sparse)
+		(bind ?fs (get-fs-value ?fsparse ?z))
+		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?frocky ?z) (get-cf ?tile)))))
+		else
+		(bind ?new-v rocky)
+		(bind ?fs (get-fs-value ?frocky ?z))
+		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fsparse ?z) (get-cf ?tile)))))
+	)
+
+
+	(printout t "Make " ?new-v ": " ?z ": Rocky " (max (get-fs-value ?frocky ?z) (get-cf ?tile)) " and sparse " (get-fs-value ?fsparse ?z) crlf)
 
 	(disable-rule-cf-calculation)
 	(retract ?tile)
-	(assert (floortile (variant rocky) (x ?x) (z ?z) (x-visited TRUE) (z-visited TRUE)) CF ?fs)
-	(enable-rule-cf-calculation)
-)
-
-(defrule update-sparse-z
-	(declare (salience 10))
-	(scanner (col ?x))
-	(floorvariant (id rocky) (ftype ?frocky))
-	(floorvariant (id sparse) (ftype ?fsparse))
-	?tile <- (floortile (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE))
-	(test (< (get-fs-value ?frocky ?x) (get-fs-value ?fsparse ?z)))
-	(test (< (get-cf ?tile) (get-fs-value ?fsparse ?z)))
-=>
-	(bind ?fs (get-fs-value ?fsparse ?z))
-	(printout t "Make sparse " ?z ": Rocky " (max (get-fs-value ?frocky ?x) (get-cf ?tile)) " and sparse " (get-fs-value ?fsparse ?x) crlf)
-
-	(disable-rule-cf-calculation)
-	(retract ?tile)
-	(assert (floortile (variant sparse) (x ?x) (z ?z) (x-visited TRUE) (z-visited TRUE)) CF ?fs)
+	(assert (floortile (variant ?new-v) (x ?x) (z ?z) (x-visited TRUE) (z-visited TRUE)) CF ?cf)
 	(enable-rule-cf-calculation)
 )
 
@@ -310,8 +455,9 @@
 
 
 (deffacts init-facts
-	(params (x-min 0) (x-max 5) (z-min 0) (z-max 3))
-	(keytile (variant rocky) (x 1) (z 0)) CF 0.21
-	(keytile (variant sparse) (x 4) (z 0)) CF 0.8
-	(keytile (variant rocky) (x 2) (z 1)) CF 1.0
+	(params (x-min 0) (x-max 3) (z-min 0) (z-max 3))
+	(keytile (variant sparse) (x 0) (z 0)) CF 0.3
+	(keytile (variant sparse) (x 2) (z 0)) CF 0.1
+	(keytile (variant rocky) (x 2) (z 2)) CF 1.0
+	(keytile (variant rocky) (x 0) (z 2)) CF 1.0
 )

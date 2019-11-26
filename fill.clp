@@ -21,7 +21,7 @@
 	(slot z-visited (default FALSE))
 )
 
-(deftemplate floorvariant
+(deftemplate floorcolor
 	(slot id)
 	(slot ftype (type FUZZY-VALUE floortype))
 )
@@ -101,32 +101,32 @@
 	(scanner (col ?x) (row ?z))
 	(test (neq ?x ?xmax))
 
-	?fv-r <- (floorvariant (id rocky))
-	?fv-s <- (floorvariant (id sparse))
+	?fv-r <- (floorcolor (id blue))
+	?fv-s <- (floorcolor (id red))
 	(not (fns-set-for-row TRUE))
 =>
 	(retract ?fv-r)
 	(retract ?fv-s)
-	(assert (floorvariant (id rocky) (ftype (0 0))))
-	(assert (floorvariant (id sparse) (ftype (0 0))))
+	(assert (floorcolor (id blue) (ftype (0 0))))
+	(assert (floorcolor (id red) (ftype (0 0))))
 	(assert (fns-set-for-row TRUE))
 )
 
 (defrule init-fns	"Initialize variant profiles"
 	(declare (salience 31))
 =>
-	(assert (floorvariant (id rocky) (ftype (0 0))))
-	(assert (floorvariant (id sparse) (ftype (0 0))))
+	(assert (floorcolor (id blue) (ftype (0 0))))
+	(assert (floorcolor (id red) (ftype (0 0))))
 	(assert (scanner (row 0) (col 0)))
 )
 
 
-(defrule inform-rocky-x	"Develop rocky variant profile"
+(defrule inform-blue-x	"Develop blue variant profile"
 	(declare (salience 31))
 	(params (z-max ?zmax))
 	(scanner (row ?z&~?zmax))
-	?ft <- (keytile (variant rocky) (x ?x) (z ?z) (x-visited FALSE))
-	?v <- (floorvariant (id rocky) (ftype ?f))
+	?ft <- (keytile (variant blue) (x ?x) (z ?z) (x-visited FALSE))
+	?v <- (floorcolor (id blue) (ftype ?f))
 =>
 	(bind ?cf (get-cf ?ft))
 	(bind ?base (* ?cf 5))
@@ -135,16 +135,16 @@
 
 	(disable-rule-cf-calculation)
 	(retract ?ft)
-	(assert (keytile (variant rocky) (x ?x) (z ?z) (x-visited TRUE)) CF ?cf)
+	(assert (keytile (variant blue) (x ?x) (z ?z) (x-visited TRUE)) CF ?cf)
 	(enable-rule-cf-calculation)
 )
 
-(defrule inform-sparse-x	"Develop sparse variant profile"
+(defrule inform-red-x	"Develop red variant profile"
 	(declare (salience 31))
 	(params (z-max ?zmax))
 	(scanner (row ?z&~?zmax))
-	?ft <- (keytile (variant sparse) (x ?x) (z ?z) (x-visited FALSE))
-	?v <- (floorvariant (id sparse) (ftype ?f))
+	?ft <- (keytile (variant red) (x ?x) (z ?z) (x-visited FALSE))
+	?v <- (floorcolor (id red) (ftype ?f))
 =>
 	(bind ?cf (get-cf ?ft))
 	(bind ?base (* ?cf 5))
@@ -153,16 +153,16 @@
 
 	(disable-rule-cf-calculation)
 	(retract ?ft)
-	(assert (keytile (variant sparse) (x ?x) (z ?z) (x-visited TRUE)) CF ?cf)
+	(assert (keytile (variant red) (x ?x) (z ?z) (x-visited TRUE)) CF ?cf)
 	(enable-rule-cf-calculation)
 )
 
-(defrule inform-rocky-z		"Develop rocky variant profile"
+(defrule inform-blue-z		"Develop blue variant profile"
 	(declare (salience 30))
 	(params (x-max ?xmax) (z-max ?zmax))
 	(scanner (col ?x&~?xmax) (row ?zmax))
-	?ft <- (keytile (variant rocky) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE))
-	?v <- (floorvariant (id rocky) (ftype ?f))
+	?ft <- (keytile (variant blue) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE))
+	?v <- (floorcolor (id blue) (ftype ?f))
 =>
 	(bind ?cf (get-cf ?ft))
 	(bind ?base (* ?cf 5))
@@ -171,16 +171,16 @@
 	
 	(disable-rule-cf-calculation)
 	(retract ?ft)
-	(assert (keytile (variant rocky) (x ?x) (z ?z) (z-visited TRUE)) CF ?cf)
+	(assert (keytile (variant blue) (x ?x) (z ?z) (z-visited TRUE)) CF ?cf)
 	(enable-rule-cf-calculation)
 )
 
-(defrule inform-sparse-z	"Develop sparse variant profile"
+(defrule inform-red-z	"Develop red variant profile"
 	(declare (salience 30))
 	(params (x-max ?xmax) (z-max ?zmax))
 	(scanner (col ?x&~?xmax) (row ?zmax))
-	?ft <- (keytile (variant sparse) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE))
-	?v <- (floorvariant (id sparse) (ftype ?f))
+	?ft <- (keytile (variant red) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE))
+	?v <- (floorcolor (id red) (ftype ?f))
 =>
 	(bind ?cf (get-cf ?ft))
 	(bind ?base (* ?cf 5))
@@ -189,7 +189,7 @@
 	
 	(disable-rule-cf-calculation)
 	(retract ?ft)
-	(assert (keytile (variant sparse) (x ?x) (z ?z) (x-visited TRUE) (z-visited TRUE)) CF ?cf)
+	(assert (keytile (variant red) (x ?x) (z ?z) (x-visited TRUE) (z-visited TRUE)) CF ?cf)
 	(enable-rule-cf-calculation)
 )
 
@@ -198,8 +198,8 @@
 
 (defrule plot-variants
 	(declare (salience 21))
-	?r <- (floorvariant (id rocky))
-	?s <- (floorvariant (id sparse))
+	?r <- (floorcolor (id blue))
+	?s <- (floorcolor (id red))
 =>
 	(plot-fuzzy-value t "rs" nil nil (get-fuzzy-slot ?r ftype) (get-fuzzy-slot ?s ftype))
 )
@@ -213,28 +213,28 @@
 	(declare (salience 10))
 	(params (z-max ?zmax))
 	(scanner (row ?z&~?zmax))
-	(floorvariant (id rocky) (ftype ?frocky))
-	(floorvariant (id sparse) (ftype ?fsparse))
+	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id red) (ftype ?fred))
 	?tile <- (floortile (variant ?v) (x ?x) (z ?z) (x-visited FALSE))
 	(or
-		(test (<= (get-cf ?tile) (get-fs-value ?fsparse ?x)))
-		(test (<= (get-cf ?tile) (get-fs-value ?frocky ?x)))
+		(test (<= (get-cf ?tile) (get-fs-value ?fred ?x)))
+		(test (<= (get-cf ?tile) (get-fs-value ?fblue ?x)))
 		(test (eq ?v nil))
 	)
 =>
 
-	(if (<= (get-fs-value ?frocky ?x) (get-fs-value ?fsparse ?x))
+	(if (<= (get-fs-value ?fblue ?x) (get-fs-value ?fred ?x))
 		then
-		(bind ?new-v sparse)
-		(bind ?fs (get-fs-value ?fsparse ?x))
-		(bind ?cf (* ?fs (- 1 (get-fs-value ?frocky ?x))))
+		(bind ?new-v red)
+		(bind ?fs (get-fs-value ?fred ?x))
+		(bind ?cf (* ?fs (- 1 (get-fs-value ?fblue ?x))))
 		else
-		(bind ?new-v rocky)
-		(bind ?fs (get-fs-value ?frocky ?x))
-		(bind ?cf (* ?fs (- 1 (get-fs-value ?fsparse ?x))))
+		(bind ?new-v blue)
+		(bind ?fs (get-fs-value ?fblue ?x))
+		(bind ?cf (* ?fs (- 1 (get-fs-value ?fred ?x))))
 	)
 
-	(printout t "Make " ?new-v " " ?x ": Rocky " (get-fs-value ?frocky ?x) " and sparse " (get-fs-value ?fsparse ?x) crlf)
+	(printout t "Make " ?new-v " " ?x ": blue " (get-fs-value ?fblue ?x) " and red " (get-fs-value ?fred ?x) crlf)
 
 	(disable-rule-cf-calculation)
 	(retract ?tile)
@@ -255,23 +255,23 @@
 	(test (eq ?x0 (- ?x 1)))
 	(test (eq ?z0 (- ?z 1)))
 	
-	(floorvariant (id rocky) (ftype ?frocky))
-	(floorvariant (id sparse) (ftype ?fsparse))
+	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id red) (ftype ?fred))
 
 	(or
 		(test (eq ?v nil))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fsparse ?x0))))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?frocky ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fred ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fblue ?x0))))
 	)
 =>
 	(bind ?scalar 0.25)
-	(if (<= (get-fs-value ?frocky ?x0) (get-fs-value ?fsparse ?x0))
+	(if (<= (get-fs-value ?fblue ?x0) (get-fs-value ?fred ?x0))
 		then
-		(bind ?new-v sparse)
-		(bind ?fs (get-fs-value ?fsparse ?x0))
+		(bind ?new-v red)
+		(bind ?fs (get-fs-value ?fred ?x0))
 		else
-		(bind ?new-v rocky)
-		(bind ?fs (get-fs-value ?frocky ?x0))	
+		(bind ?new-v blue)
+		(bind ?fs (get-fs-value ?fblue ?x0))	
 	)
 	(bind ?cf (* ?fs ?scalar))
 
@@ -294,23 +294,23 @@
 	(test (eq ?x0 (+ ?x 1)))
 	(test (eq ?z0 (- ?z 1)))
 	
-	(floorvariant (id rocky) (ftype ?frocky))
-	(floorvariant (id sparse) (ftype ?fsparse))
+	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id red) (ftype ?fred))
 
 	(or
 		(test (eq ?v nil))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fsparse ?x0))))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?frocky ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fred ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fblue ?x0))))
 	)
 =>
 	(bind ?scalar 0.25)
-	(if (<= (get-fs-value ?frocky ?x0) (get-fs-value ?fsparse ?x0))
+	(if (<= (get-fs-value ?fblue ?x0) (get-fs-value ?fred ?x0))
 		then
-		(bind ?new-v sparse)
-		(bind ?fs (get-fs-value ?fsparse ?x0))
+		(bind ?new-v red)
+		(bind ?fs (get-fs-value ?fred ?x0))
 		else
-		(bind ?new-v rocky)
-		(bind ?fs (get-fs-value ?frocky ?x0))	
+		(bind ?new-v blue)
+		(bind ?fs (get-fs-value ?fblue ?x0))	
 	)
 	(bind ?cf (* ?fs ?scalar))
 
@@ -334,23 +334,23 @@
 	(test (eq ?x0 (+ ?x 1)))
 	(test (eq ?z0 (+ ?z 1)))
 	
-	(floorvariant (id rocky) (ftype ?frocky))
-	(floorvariant (id sparse) (ftype ?fsparse))
+	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id red) (ftype ?fred))
 
 	(or
 		(test (eq ?v nil))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fsparse ?x0))))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?frocky ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fred ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fblue ?x0))))
 	)
 =>
 	(bind ?scalar 0.25)
-	(if (<= (get-fs-value ?frocky ?x0) (get-fs-value ?fsparse ?x0))
+	(if (<= (get-fs-value ?fblue ?x0) (get-fs-value ?fred ?x0))
 		then
-		(bind ?new-v sparse)
-		(bind ?fs (get-fs-value ?fsparse ?x0))
+		(bind ?new-v red)
+		(bind ?fs (get-fs-value ?fred ?x0))
 		else
-		(bind ?new-v rocky)
-		(bind ?fs (get-fs-value ?frocky ?x0))	
+		(bind ?new-v blue)
+		(bind ?fs (get-fs-value ?fblue ?x0))	
 	)
 	(bind ?cf (* ?fs ?scalar))
 
@@ -373,23 +373,23 @@
 	(test (eq ?x0 (- ?x 1)))
 	(test (eq ?z0 (+ ?z 1)))
 	
-	(floorvariant (id rocky) (ftype ?frocky))
-	(floorvariant (id sparse) (ftype ?fsparse))
+	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id red) (ftype ?fred))
 
 	(or
 		(test (eq ?v nil))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fsparse ?x0))))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?frocky ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fred ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fblue ?x0))))
 	)
 =>
 	(bind ?scalar 0.25)
-	(if (<= (get-fs-value ?frocky ?x0) (get-fs-value ?fsparse ?x0))
+	(if (<= (get-fs-value ?fblue ?x0) (get-fs-value ?fred ?x0))
 		then
-		(bind ?new-v sparse)
-		(bind ?fs (get-fs-value ?fsparse ?x0))
+		(bind ?new-v red)
+		(bind ?fs (get-fs-value ?fred ?x0))
 		else
-		(bind ?new-v rocky)
-		(bind ?fs (get-fs-value ?frocky ?x0))	
+		(bind ?new-v blue)
+		(bind ?fs (get-fs-value ?fblue ?x0))	
 	)
 	(bind ?cf (* ?fs ?scalar))
 
@@ -403,27 +403,27 @@
 	(declare (salience 0))
 	(params (z-max ?zmax))
 	(scanner (col ?x) (row ?zmax))
-	(floorvariant (id rocky) (ftype ?frocky))
-	(floorvariant (id sparse) (ftype ?fsparse))
+	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id red) (ftype ?fred))
 	?tile <- (floortile (x ?x) (z ?z) (x-visited ?xvisited) (z-visited FALSE))
 	(or
-		(test (< (get-cf ?tile) (get-fs-value ?fsparse ?z)))
-		(test (< (get-cf ?tile) (get-fs-value ?frocky ?z)))
+		(test (< (get-cf ?tile) (get-fs-value ?fred ?z)))
+		(test (< (get-cf ?tile) (get-fs-value ?fblue ?z)))
 	)
 =>
-	(if (<= (get-fs-value ?frocky ?z) (get-fs-value ?fsparse ?z))
+	(if (<= (get-fs-value ?fblue ?z) (get-fs-value ?fred ?z))
 		then
-		(bind ?new-v sparse)
-		(bind ?fs (get-fs-value ?fsparse ?z))
-		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?frocky ?z) (get-cf ?tile)))))
+		(bind ?new-v red)
+		(bind ?fs (get-fs-value ?fred ?z))
+		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fblue ?z) (get-cf ?tile)))))
 		else
-		(bind ?new-v rocky)
-		(bind ?fs (get-fs-value ?frocky ?z))
-		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fsparse ?z) (get-cf ?tile)))))
+		(bind ?new-v blue)
+		(bind ?fs (get-fs-value ?fblue ?z))
+		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?z) (get-cf ?tile)))))
 	)
 
 
-	(printout t "Make " ?new-v ": " ?z ": Rocky " (max (get-fs-value ?frocky ?z) (get-cf ?tile)) " and sparse " (get-fs-value ?fsparse ?z) crlf)
+	(printout t "Make " ?new-v ": " ?z ": blue " (max (get-fs-value ?fblue ?z) (get-cf ?tile)) " and red " (get-fs-value ?fred ?z) crlf)
 
 	(disable-rule-cf-calculation)
 	(retract ?tile)
@@ -456,15 +456,4 @@
 =>
 	(modify ?s (col (+ ?x 1)))
 	(retract ?r)
-)
-
-
-
-
-(deffacts init-facts
-	(params (x-min 0) (x-max 3) (z-min 0) (z-max 3))
-	(keytile (variant sparse) (x 0) (z 0)) CF 0.99
-	(keytile (variant sparse) (x 2) (z 0)) CF 0.9
-	(keytile (variant rocky) (x 2) (z 2)) CF 1.0
-	(keytile (variant rocky) (x 0) (z 2)) CF 1.0
 )

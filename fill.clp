@@ -38,6 +38,66 @@
 	(slot col (default 0))
 )
 
+(deftemplate file 
+	(slot fname)
+	(slot fptr)
+	(slot mode)
+)
+
+
+
+
+(defrule init-f-reader
+	(declare (salience 90))
+	?output-file <- (file (fname ?src) (mode r) (fptr nil))
+=>
+	(open ?src readFile "r")
+	(modify ?output-file (fptr readFile))
+)
+
+(defrule read-next
+	(declare (salience 89))
+	(file (fptr ?reader&~nil) (mode r))
+	(or (keytile) (not (keytile)))
+	(params)
+	(not (read-EOF))
+=>
+	(bind ?x (read ?reader))
+	(if (neq ?x EOF)
+	then
+		(bind ?z (read ?reader))
+		(bind ?v (read ?reader))
+		(bind ?cf (read ?reader))
+
+		(disable-rule-cf-calculation)
+		(assert (keytile (x ?x) (z ?z) (variant ?v)) CF ?cf)
+		(enable-rule-cf-calculation)
+
+	else
+		(assert (read-EOF))
+	)
+)
+
+(defrule read-first
+	(declare (salience 89))
+	(file (fptr ?reader&~nil) (mode r))
+	(not (params))
+=>
+	(bind ?x-min (read ?reader))
+	(bind ?x-max (read ?reader))
+	(bind ?z-min (read ?reader))
+	(bind ?z-max (read ?reader))
+	(assert (params (x-min ?x-min) (x-max ?x-max) (z-min ?z-min) (z-max ?z-max)))
+)
+
+(defrule close-f-reader
+	(declare (salience 88))
+	?f <- (file (fptr ?reader&~nil) (mode r))
+=>
+	(close ?reader)
+)
+
+
 
 
 
@@ -51,6 +111,20 @@
 	(retract ?k2)
 )
 
+(defrule remove-overflow-keys "Remove key tiles that overflow the map bounds"
+	(declare (salience 60))
+	(params (x-min ?xmin) (x-max ?xmax) (z-min ?zmin) (z-max ?zmax))
+	?k1 <- (keytile (x ?x) (z ?z))
+	(or
+		(test (< ?x ?xmin))
+		(test (>= ?x ?xmax))
+		(test (< ?z ?zmin))
+		(test (>= ?z ?zmax))
+	)
+=>
+	(printout t "Retracting overflow keytile at " ?x " " ?z crlf)
+	(retract ?k1)
+)
 
 
 (defrule make-init-tile
@@ -102,12 +176,15 @@
 	(test (neq ?x ?xmax))
 
 	?fv-r <- (floorcolor (id blue))
+	?fv-y <- (floorcolor (id yellow))
 	?fv-s <- (floorcolor (id red))
 	(not (fns-set-for-row TRUE))
 =>
 	(retract ?fv-r)
+	(retract ?fv-y)
 	(retract ?fv-s)
 	(assert (floorcolor (id blue) (ftype (0 0))))
+	(assert (floorcolor (id yellow) (ftype (0 0))))
 	(assert (floorcolor (id red) (ftype (0 0))))
 	(assert (fns-set-for-row TRUE))
 )
@@ -116,92 +193,62 @@
 	(declare (salience 31))
 =>
 	(assert (floorcolor (id blue) (ftype (0 0))))
+	(assert (floorcolor (id yellow) (ftype (0 0))))
 	(assert (floorcolor (id red) (ftype (0 0))))
 	(assert (scanner (row 0) (col 0)))
 )
 
 
-(defrule inform-blue-x	"Develop blue variant profile"
+(defrule inform-variant-row	"Develop color variant profile"
 	(declare (salience 31))
 	(params (z-max ?zmax))
 	(scanner (row ?z&~?zmax))
-	?ft <- (keytile (variant blue) (x ?x) (z ?z) (x-visited FALSE))
-	?v <- (floorcolor (id blue) (ftype ?f))
+	?ft <- (keytile (variant ?color) (x ?x) (z ?z) (x-visited FALSE))
+	?v <- (floorcolor (id ?color) (ftype ?f))
 =>
+	(bind ?scalar 4)
 	(bind ?cf (get-cf ?ft))
-	(bind ?base (* ?cf 5))
+	(bind ?base (* ?cf ?scalar))
 	(bind ?t (fuzzy-union ?f (create-fuzzy-value floortype (PI ?base ?x))))
 	(modify ?v (ftype ?t))
 
 	(disable-rule-cf-calculation)
 	(retract ?ft)
-	(assert (keytile (variant blue) (x ?x) (z ?z) (x-visited TRUE)) CF ?cf)
+	(assert (keytile (variant ?color) (x ?x) (z ?z) (x-visited TRUE)) CF ?cf)
 	(enable-rule-cf-calculation)
 )
 
-(defrule inform-red-x	"Develop red variant profile"
-	(declare (salience 31))
-	(params (z-max ?zmax))
-	(scanner (row ?z&~?zmax))
-	?ft <- (keytile (variant red) (x ?x) (z ?z) (x-visited FALSE))
-	?v <- (floorcolor (id red) (ftype ?f))
-=>
-	(bind ?cf (get-cf ?ft))
-	(bind ?base (* ?cf 5))
-	(bind ?t (fuzzy-union ?f (create-fuzzy-value floortype (PI ?base ?x))))
-	(modify ?v (ftype ?t))
 
-	(disable-rule-cf-calculation)
-	(retract ?ft)
-	(assert (keytile (variant red) (x ?x) (z ?z) (x-visited TRUE)) CF ?cf)
-	(enable-rule-cf-calculation)
-)
-
-(defrule inform-blue-z		"Develop blue variant profile"
+(defrule inform-variant-col		"Develop color variant profile"
 	(declare (salience 30))
 	(params (x-max ?xmax) (z-max ?zmax))
 	(scanner (col ?x&~?xmax) (row ?zmax))
-	?ft <- (keytile (variant blue) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE))
-	?v <- (floorcolor (id blue) (ftype ?f))
+	?ft <- (keytile (variant ?color) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE))
+	?v <- (floorcolor (id ?color) (ftype ?f))
 =>
+	(bind ?scalar 4)
 	(bind ?cf (get-cf ?ft))
-	(bind ?base (* ?cf 5))
+	(bind ?base (* ?cf ?scalar))
 	(bind ?t (fuzzy-union ?f (create-fuzzy-value floortype (PI ?base ?z))))
 	(modify ?v (ftype ?t))
 	
 	(disable-rule-cf-calculation)
 	(retract ?ft)
-	(assert (keytile (variant blue) (x ?x) (z ?z) (z-visited TRUE)) CF ?cf)
+	(assert (keytile (variant ?color) (x ?x) (z ?z) (z-visited TRUE)) CF ?cf)
 	(enable-rule-cf-calculation)
 )
 
-(defrule inform-red-z	"Develop red variant profile"
-	(declare (salience 30))
-	(params (x-max ?xmax) (z-max ?zmax))
-	(scanner (col ?x&~?xmax) (row ?zmax))
-	?ft <- (keytile (variant red) (x ?x) (z ?z) (x-visited TRUE) (z-visited FALSE))
-	?v <- (floorcolor (id red) (ftype ?f))
-=>
-	(bind ?cf (get-cf ?ft))
-	(bind ?base (* ?cf 5))
-	(bind ?t (fuzzy-union ?f (create-fuzzy-value floortype (PI ?base ?z))))
-	(modify ?v (ftype ?t))
-	
-	(disable-rule-cf-calculation)
-	(retract ?ft)
-	(assert (keytile (variant red) (x ?x) (z ?z) (x-visited TRUE) (z-visited TRUE)) CF ?cf)
-	(enable-rule-cf-calculation)
-)
 
 
 
 
 (defrule plot-variants
 	(declare (salience 21))
-	?r <- (floorcolor (id blue))
-	?s <- (floorcolor (id red))
+	(floorcolor (id red) (ftype ?r))
+	(floorcolor (id yellow) (ftype ?y))
+	(floorcolor (id blue) (ftype ?b))
 =>
-	(plot-fuzzy-value t "rs" nil nil (get-fuzzy-slot ?r ftype) (get-fuzzy-slot ?s ftype))
+	(plot-fuzzy-value t "ryb" nil nil ?r ?y ?b)
 )
 
 
@@ -214,27 +261,39 @@
 	(params (z-max ?zmax))
 	(scanner (row ?z&~?zmax))
 	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id yellow) (ftype ?fyellow))
 	(floorcolor (id red) (ftype ?fred))
 	?tile <- (floortile (variant ?v) (x ?x) (z ?z) (x-visited FALSE))
+
+
 	(or
 		(test (<= (get-cf ?tile) (get-fs-value ?fred ?x)))
 		(test (<= (get-cf ?tile) (get-fs-value ?fblue ?x)))
+		(test (<= (get-cf ?tile) (get-fs-value ?fyellow ?x)))
 		(test (eq ?v nil))
 	)
 =>
+	(bind ?m-val (max (get-fs-value ?fred ?x) (get-fs-value ?fyellow ?x) (get-fs-value ?fblue ?x)))
 
-	(if (<= (get-fs-value ?fblue ?x) (get-fs-value ?fred ?x))
+	(if (eq (get-fs-value ?fred ?x) ?m-val)
 		then
 		(bind ?new-v red)
 		(bind ?fs (get-fs-value ?fred ?x))
-		(bind ?cf (* ?fs (- 1 (get-fs-value ?fblue ?x))))
+		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fblue ?x) (get-fs-value ?fyellow ?x)))))
 		else
-		(bind ?new-v blue)
-		(bind ?fs (get-fs-value ?fblue ?x))
-		(bind ?cf (* ?fs (- 1 (get-fs-value ?fred ?x))))
+		(if (eq (get-fs-value ?fyellow ?x) ?m-val)
+			then
+			(bind ?new-v yellow)
+			(bind ?fs (get-fs-value ?fyellow ?x))
+			(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?x) (get-fs-value ?fblue ?x)))))
+			else
+			(bind ?new-v blue)
+			(bind ?fs (get-fs-value ?fblue ?x))
+			(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?x) (get-fs-value ?fyellow ?x)))))
+		)
 	)
 
-	(printout t "Make " ?new-v " " ?x ": blue " (get-fs-value ?fblue ?x) " and red " (get-fs-value ?fred ?x) crlf)
+	(printout t "Make " ?new-v " " ?x ": blue " (get-fs-value ?fblue ?x) " and yellow " (get-fs-value ?fyellow ?x) " and red " (get-fs-value ?fred ?x) crlf)
 
 	(disable-rule-cf-calculation)
 	(retract ?tile)
@@ -242,36 +301,45 @@
 	(enable-rule-cf-calculation)
 )
 
-(defrule update-up-left-on-row-scan	"Predict diagonal variant for row scan"
+(defrule update-left-updown-on-row-scan	"Predict diagonal variant for row scan"
 	(declare (salience 10))
 	(scanner (row ?z))
-	(params (x-min ?xmin) (z-min ?zmin))
 	?tile <- (keytile (x ?x) (z ?z))
-
-	(test (> ?x ?xmin))
-	(test (> ?z ?zmin))
 	
 	?target <- (floortile (variant ?v) (x ?x0) (z ?z0) (x-visited ?xvisited))
 	(test (eq ?x0 (- ?x 1)))
-	(test (eq ?z0 (- ?z 1)))
+	(or
+		(test (eq ?z0 (- ?z 1)))
+		(test (eq ?z0 (+ ?z 1)))
+	)
 	
 	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id yellow) (ftype ?fyellow))
 	(floorcolor (id red) (ftype ?fred))
 
 	(or
 		(test (eq ?v nil))
 		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fred ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fyellow ?x0))))
 		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fblue ?x0))))
 	)
 =>
 	(bind ?scalar 0.25)
-	(if (<= (get-fs-value ?fblue ?x0) (get-fs-value ?fred ?x0))
+	(bind ?m-val (max (get-fs-value ?fred ?x0) (get-fs-value ?fyellow ?x0) (get-fs-value ?fblue ?x0)))
+
+	(if (eq ?m-val (get-fs-value ?fred ?x0))
 		then
 		(bind ?new-v red)
 		(bind ?fs (get-fs-value ?fred ?x0))
 		else
-		(bind ?new-v blue)
-		(bind ?fs (get-fs-value ?fblue ?x0))	
+		(if (eq ?m-val (get-fs-value ?fyellow ?x0))
+			then
+			(bind ?new-v yellow)
+			(bind ?fs (get-fs-value ?fyellow ?x0))	
+			else
+			(bind ?new-v blue)
+			(bind ?fs (get-fs-value ?fblue ?x0))	
+		)
 	)
 	(bind ?cf (* ?fs ?scalar))
 
@@ -281,36 +349,47 @@
 	(enable-rule-cf-calculation)
 )
 
-(defrule update-up-right-on-row-scan	"Predict diagonal variant for row scan"
+
+
+(defrule update-right-updown-on-row-scan	"Predict diagonal variant for row scan"
 	(declare (salience 10))
 	(scanner (row ?z))
-	(params (x-max ?xmax) (z-min ?zmin))
 	?tile <- (keytile (x ?x) (z ?z))
-
-	(test (< ?x (- ?xmax 1)))
-	(test (> ?z ?zmin))
 	
 	?target <- (floortile (variant ?v) (x ?x0) (z ?z0) (x-visited ?xvisited))
 	(test (eq ?x0 (+ ?x 1)))
-	(test (eq ?z0 (- ?z 1)))
+	(or
+		(test (eq ?z0 (- ?z 1)))
+		(test (eq ?z0 (+ ?z 1)))
+	)
 	
 	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id yellow) (ftype ?fyellow))
 	(floorcolor (id red) (ftype ?fred))
-
+	
 	(or
 		(test (eq ?v nil))
 		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fred ?x0))))
+		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fyellow ?x0))))
 		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fblue ?x0))))
 	)
 =>
 	(bind ?scalar 0.25)
-	(if (<= (get-fs-value ?fblue ?x0) (get-fs-value ?fred ?x0))
+	(bind ?m-val (max (get-fs-value ?fred ?x0) (get-fs-value ?fyellow ?x0) (get-fs-value ?fblue ?x0)))
+
+	(if (eq ?m-val (get-fs-value ?fred ?x0))
 		then
 		(bind ?new-v red)
 		(bind ?fs (get-fs-value ?fred ?x0))
 		else
-		(bind ?new-v blue)
-		(bind ?fs (get-fs-value ?fblue ?x0))	
+		(if (eq ?m-val (get-fs-value ?fyellow ?x0))
+			then
+			(bind ?new-v yellow)
+			(bind ?fs (get-fs-value ?fyellow ?x0))	
+			else
+			(bind ?new-v blue)
+			(bind ?fs (get-fs-value ?fblue ?x0))	
+		)
 	)
 	(bind ?cf (* ?fs ?scalar))
 
@@ -321,107 +400,43 @@
 	(enable-rule-cf-calculation)
 )
 
-(defrule update-down-right-on-row-scan	"Predict diagonal variant for row scan"
-	(declare (salience 10))
-	(scanner (row ?z))
-	(params (x-max ?xmax) (z-max ?zmax))
-	?tile <- (keytile (x ?x) (z ?z))
 
-	(test (< ?x (- ?xmax 1)))
-	(test (< ?z (- ?zmax 1)))
-	
-	?target <- (floortile (variant ?v) (x ?x0) (z ?z0) (x-visited ?xvisited))
-	(test (eq ?x0 (+ ?x 1)))
-	(test (eq ?z0 (+ ?z 1)))
-	
-	(floorcolor (id blue) (ftype ?fblue))
-	(floorcolor (id red) (ftype ?fred))
-
-	(or
-		(test (eq ?v nil))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fred ?x0))))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fblue ?x0))))
-	)
-=>
-	(bind ?scalar 0.25)
-	(if (<= (get-fs-value ?fblue ?x0) (get-fs-value ?fred ?x0))
-		then
-		(bind ?new-v red)
-		(bind ?fs (get-fs-value ?fred ?x0))
-		else
-		(bind ?new-v blue)
-		(bind ?fs (get-fs-value ?fblue ?x0))	
-	)
-	(bind ?cf (* ?fs ?scalar))
-
-	(disable-rule-cf-calculation)
-	(retract ?target)
-	(assert (floortile (variant ?new-v) (x ?x0) (z ?z0) (x-visited ?xvisited) (z-visited FALSE)) CF ?cf)
-	(enable-rule-cf-calculation)
-)
-
-(defrule update-down-left-on-row-scan	"Predict diagonal variant for row scan"
-	(declare (salience 10))
-	(scanner (row ?z))
-	(params (x-min ?xmin) (z-max ?zmax))
-	?tile <- (keytile (x ?x) (z ?z))
-
-	(test (> ?x ?xmin))
-	(test (< ?z (- ?zmax 1)))
-	
-	?target <- (floortile (variant ?v) (x ?x0) (z ?z0) (x-visited ?xvisited))
-	(test (eq ?x0 (- ?x 1)))
-	(test (eq ?z0 (+ ?z 1)))
-	
-	(floorcolor (id blue) (ftype ?fblue))
-	(floorcolor (id red) (ftype ?fred))
-
-	(or
-		(test (eq ?v nil))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fred ?x0))))
-		(test (< (get-cf ?target) (* 0.25 (get-fs-value ?fblue ?x0))))
-	)
-=>
-	(bind ?scalar 0.25)
-	(if (<= (get-fs-value ?fblue ?x0) (get-fs-value ?fred ?x0))
-		then
-		(bind ?new-v red)
-		(bind ?fs (get-fs-value ?fred ?x0))
-		else
-		(bind ?new-v blue)
-		(bind ?fs (get-fs-value ?fblue ?x0))	
-	)
-	(bind ?cf (* ?fs ?scalar))
-
-	(disable-rule-cf-calculation)
-	(retract ?target)
-	(assert (floortile (variant ?new-v) (x ?x0) (z ?z0) (x-visited ?xvisited) (z-visited FALSE)) CF ?cf)
-	(enable-rule-cf-calculation)
-)
 
 (defrule update-z	"Predict variant for column scan"
 	(declare (salience 0))
 	(params (z-max ?zmax))
 	(scanner (col ?x) (row ?zmax))
 	(floorcolor (id blue) (ftype ?fblue))
+	(floorcolor (id yellow) (ftype ?fyellow))
 	(floorcolor (id red) (ftype ?fred))
 	?tile <- (floortile (x ?x) (z ?z) (x-visited ?xvisited) (z-visited FALSE))
 	(or
 		(test (< (get-cf ?tile) (get-fs-value ?fred ?z)))
+		(test (< (get-cf ?tile) (get-fs-value ?fyellow ?z)))
 		(test (< (get-cf ?tile) (get-fs-value ?fblue ?z)))
 	)
 =>
-	(if (<= (get-fs-value ?fblue ?z) (get-fs-value ?fred ?z))
+	(bind ?m-val (max (get-fs-value ?fred ?x) (get-fs-value ?fyellow ?x) (get-fs-value ?fblue ?x)))
+
+	(if (eq (get-fs-value ?fred ?x) ?m-val)
 		then
 		(bind ?new-v red)
-		(bind ?fs (get-fs-value ?fred ?z))
-		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fblue ?z) (get-cf ?tile)))))
+		(bind ?fs (get-fs-value ?fred ?x))
+		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fblue ?x) (get-fs-value ?fyellow ?x)))))
 		else
-		(bind ?new-v blue)
-		(bind ?fs (get-fs-value ?fblue ?z))
-		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?z) (get-cf ?tile)))))
+		(if (eq (get-fs-value ?fyellow ?x) ?m-val)
+			then
+			(bind ?new-v yellow)
+			(bind ?fs (get-fs-value ?fyellow ?x))
+			(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?x) (get-fs-value ?fblue ?x)))))
+			else
+			(bind ?new-v blue)
+			(bind ?fs (get-fs-value ?fblue ?x))
+			(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?x) (get-fs-value ?fyellow ?x)))))
+		)
 	)
 
+	(printout t "Make " ?new-v " " ?x ": blue " (get-fs-value ?fblue ?x) " and yellow " (get-fs-value ?fyellow ?x) " and red " (get-fs-value ?fred ?x) crlf)
 
 	(printout t "Make " ?new-v ": " ?z ": blue " (max (get-fs-value ?fblue ?z) (get-cf ?tile)) " and red " (get-fs-value ?fred ?z) crlf)
 
@@ -456,4 +471,32 @@
 =>
 	(modify ?s (col (+ ?x 1)))
 	(retract ?r)
+)
+
+
+(defrule init-f-writer
+(declare (salience -90))
+?output-file <- (file (fname ?dst) (mode w) (fptr nil))
+=>
+(open ?dst writeFile "w")
+(modify ?output-file (fptr writeFile))
+)
+
+(defrule write-floortile
+(declare (salience -90))
+(file (fptr ?writer&~nil) (mode w))
+(or
+	?t <- (floortile (x ?x) (z ?z) (variant ?color))
+	?t <- (keytile (x ?x) (z ?z) (variant ?color))
+)
+=>
+(printout t "Writing tile " ?x " " ?z crlf)
+(printout ?writer ?x "," ?z "," ?color crlf)
+)
+
+(defrule close-f-writer
+(declare (salience -91))
+?f <- (file (fptr ?writer&~nil) (mode w))
+=>
+(close ?writer)
 )

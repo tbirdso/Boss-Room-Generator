@@ -127,7 +127,7 @@
 )
 
 
-(defrule make-init-tile
+(defrule make-init-tile "Populate tile at the origin of the grid"
 	(declare (salience 40))
 	(params (x-min ?xmin) (z-min ?zmin))
 	(not (floortile (x ?xmin) (z ?zmin)))
@@ -136,7 +136,7 @@
 	(assert (floortile (x ?xmin) (z ?zmin)))
 )
 
-(defrule make-adj-tile-x "Fill grid on x-axis"
+(defrule make-adj-tile-x "Populate grid on x-axis"
 	(declare (salience 40))
 	(params (x-max ?xmax))
 	(or
@@ -151,7 +151,7 @@
 	(assert (floortile (x ?x1) (z ?z)))
 )
 
-(defrule make-adj-tile-z "Fill grid on z-axis"
+(defrule make-adj-tile-z "Populate grid on z-axis"
 	(declare (salience 40))
 	(params (z-max ?zmax))
 	(or
@@ -242,7 +242,7 @@
 
 
 
-(defrule plot-variants
+(defrule plot-variants "Plot membership functions along the scanned row/column"
 	(declare (salience 21))
 	(floorcolor (id red) (ftype ?r))
 	(floorcolor (id yellow) (ftype ?y))
@@ -416,27 +416,25 @@
 		(test (< (get-cf ?tile) (get-fs-value ?fblue ?z)))
 	)
 =>
-	(bind ?m-val (max (get-fs-value ?fred ?x) (get-fs-value ?fyellow ?x) (get-fs-value ?fblue ?x)))
+	(bind ?m-val (max (get-fs-value ?fred ?z) (get-fs-value ?fyellow ?z) (get-fs-value ?fblue ?z)))
 
-	(if (eq (get-fs-value ?fred ?x) ?m-val)
+	(if (eq (get-fs-value ?fred ?z) ?m-val)
 		then
 		(bind ?new-v red)
-		(bind ?fs (get-fs-value ?fred ?x))
-		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fblue ?x) (get-fs-value ?fyellow ?x)))))
+		(bind ?fs (get-fs-value ?fred ?z))
+		(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fblue ?z) (get-fs-value ?fyellow ?z)))))
 		else
-		(if (eq (get-fs-value ?fyellow ?x) ?m-val)
+		(if (eq (get-fs-value ?fyellow ?z) ?m-val)
 			then
 			(bind ?new-v yellow)
-			(bind ?fs (get-fs-value ?fyellow ?x))
-			(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?x) (get-fs-value ?fblue ?x)))))
+			(bind ?fs (get-fs-value ?fyellow ?z))
+			(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?z) (get-fs-value ?fblue ?z)))))
 			else
 			(bind ?new-v blue)
-			(bind ?fs (get-fs-value ?fblue ?x))
-			(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?x) (get-fs-value ?fyellow ?x)))))
+			(bind ?fs (get-fs-value ?fblue ?z))
+			(bind ?cf (* ?fs (- 1 (max (get-fs-value ?fred ?z) (get-fs-value ?fyellow ?z)))))
 		)
 	)
-
-	(printout t "Make " ?new-v " " ?x ": blue " (get-fs-value ?fblue ?x) " and yellow " (get-fs-value ?fyellow ?x) " and red " (get-fs-value ?fred ?x) crlf)
 
 	(printout t "Make " ?new-v ": " ?z ": blue " (max (get-fs-value ?fblue ?z) (get-cf ?tile)) " and red " (get-fs-value ?fred ?z) crlf)
 
